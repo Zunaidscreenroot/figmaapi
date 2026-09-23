@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_GEMINI_MODELS, generateWithFallback } from "../src/gemini.js";
 import { auditResponseSchema } from "../src/schema.js";
 import { VISUAL_AUDIT_SYSTEM_PROMPT } from "../src/prompt.js";
 
@@ -110,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auditMethod: "POST",
       workflow: "analyze-reference -> visual-audit",
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      model: MODEL
+      model: usedModel
     });
   }
 
@@ -205,8 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const { response, model: usedModel } = await generateWithFallback(ai, {
       contents,
       config: {
         responseMimeType: "application/json",
@@ -235,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       ...result,
       meta: {
-        model: MODEL,
+        model: usedModel,
         referenceCount: profiles.length,
         generatedAt: new Date().toISOString()
       }
