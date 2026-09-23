@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/visual-audit.ts": {
+      "maxDuration": 60
+    }
+  }
+}
