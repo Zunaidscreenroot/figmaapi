@@ -108,7 +108,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       service: "figma-visual-qa-api",
       endpoint: "/api/visual-audit",
       auditMethod: "POST",
-      workflow: "analyze-reference -> visual-audit"
+      workflow: "analyze-reference -> visual-audit",
+      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+      model: MODEL
     });
   }
 
@@ -123,8 +125,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({
-      error: "GEMINI_API_KEY is not configured on the server."
+    console.error("visual-audit config error: GEMINI_API_KEY missing");
+    return res.status(503).json({
+      error: "Gemini is not configured on this deployment.",
+      code: "GEMINI_API_KEY_MISSING"
     });
   }
 
@@ -239,9 +243,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error("visual-audit error", error);
 
-    return res.status(500).json({
-      error: "Visual audit failed.",
-      detail: error instanceof Error ? error.message : "Unknown server error."
+    const detail = error instanceof Error ? error.message : "Unknown server error.";
+
+    return res.status(502).json({
+      error: "Gemini visual audit request failed.",
+      code: "GEMINI_UPSTREAM_ERROR",
+      detail,
+      model: MODEL
     });
   }
 }
