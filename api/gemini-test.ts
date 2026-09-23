@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_GEMINI_MODELS, generateWithFallback } from "../src/gemini.js";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
@@ -31,14 +32,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       apiKey: process.env.GEMINI_API_KEY
     });
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const { response, model: usedModel } = await generateWithFallback(ai, {
       contents: "Reply with exactly: GEMINI_OK"
     });
 
     return res.status(200).json({
       status: "ok",
-      model: MODEL,
+      model: usedModel,
       response: response.text?.trim() || "",
       message: "Gemini text request succeeded."
     });
@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(502).json({
       status: "error",
       code: "GEMINI_UPSTREAM_ERROR",
-      model: MODEL,
+      model: DEFAULT_GEMINI_MODELS.join(", "),
       detail: error instanceof Error ? error.message : "Unknown Gemini error."
     });
   }
