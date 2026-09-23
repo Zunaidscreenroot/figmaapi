@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_GEMINI_MODELS, generateWithFallback } from "../src/gemini.js";
 import { referenceProfileSchema } from "../src/reference-schema.js";
 
 const referencePrompt = "You are a senior UI/UX visual analyst.\n\nAnalyze one Figma website reference render.\n\nYour goal is to extract the website's recurring visual language for later comparison.\n\nInspect:\n- layout structure\n- content alignment\n- grid/columns\n- container relationships\n- section spacing\n- element gaps\n- internal padding\n- whitespace\n- visual density\n- typography hierarchy\n- repeated component patterns\n- buttons\n- cards\n- images\n- borders\n- radius\n- header\n- footer\n- CTA treatment\n- visual rhythm\n- section composition\n\nDo not impose a predefined design system.\nDo not judge the page using fixed page dimensions.\nFocus on relationships, proportions and recurring visual patterns visible in this reference.\n\nReturn concise patterns with evidence and confidence.\n";
@@ -93,8 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const { response, model: usedModel } = await generateWithFallback(ai, {
       contents: [
         { text: "You are a senior UI/UX visual analyst.\n\nAnalyze one Figma website reference render.\n\nYour goal is to extract the website's recurring visual language for later comparison.\n\nInspect:\n- layout structure\n- content alignment\n- grid/columns\n- container relationships\n- section spacing\n- element gaps\n- internal padding\n- whitespace\n- visual density\n- typography hierarchy\n- repeated component patterns\n- buttons\n- cards\n- images\n- borders\n- radius\n- header\n- footer\n- CTA treatment\n- visual rhythm\n- section composition\n\nDo not impose a predefined design system.\nDo not judge the page using fixed page dimensions.\nFocus on relationships, proportions and recurring visual patterns visible in this reference.\n\nReturn concise patterns with evidence and confidence.\n" },
         { inlineData: { mimeType: image.mimeType, data: image.data } },
@@ -121,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: "Gemini returned non-JSON output.",
         code: "GEMINI_INVALID_JSON",
         raw: response.text.slice(0, 2000),
-        model: MODEL
+        model: usedModel
       });
     }
 
@@ -139,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: "Gemini reference analysis request failed.",
       code: "GEMINI_UPSTREAM_ERROR",
       detail: error instanceof Error ? error.message : "Unknown server error.",
-      model: MODEL
+      model: usedModel
     });
   }
 }
