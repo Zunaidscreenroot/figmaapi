@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
+type GenerateContentRequest = Parameters<GoogleGenAI["models"]["generateContent"]>[0];
+
 export const DEFAULT_GEMINI_MODELS = [
   process.env.GEMINI_MODEL || "gemini-3.8-flash",
   ...(process.env.GEMINI_FALLBACK_MODELS
@@ -25,10 +27,11 @@ export function isRetryableGeminiError(error: unknown): boolean {
 
 export async function generateWithFallback(
   ai: GoogleGenAI,
-  request: Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model"> & {
-    model?: string;
-  }
-) {
+  request: Omit<GenerateContentRequest, "model">
+): Promise<{
+  response: Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>;
+  model: string;
+}> {
   const errors: Array<{ model: string; message: string }> = [];
 
   for (const model of DEFAULT_GEMINI_MODELS) {
@@ -39,13 +42,11 @@ export async function generateWithFallback(
           model
         });
 
-        return {
-          response,
-          model,
-          attemptedModels: errors.map((entry) => entry.model).concat(model)
-        };
+        return { response, model };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error ?? "Unknown Gemini error");
+        const message =
+          error instanceof Error ? error.message : String(error ?? "Unknown Gemini error");
+
         errors.push({ model, message });
 
         if (!isRetryableGeminiError(error) || attempt === 1) {
