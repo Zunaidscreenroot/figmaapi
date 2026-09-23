@@ -105,8 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       ],
       config: {
-        responseMimeType: "application/json",
-        responseSchema: referenceProfileSchema
+        responseMimeType: "application/json"
       }
     });
 
@@ -114,7 +113,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: "Gemini returned an empty response." });
     }
 
-    const profile = JSON.parse(response.text.trim());
+    let profile: unknown;
+    try {
+      profile = JSON.parse(response.text.trim());
+    } catch {
+      return res.status(502).json({
+        error: "Gemini returned non-JSON output.",
+        code: "GEMINI_INVALID_JSON",
+        raw: response.text.slice(0, 2000),
+        model: MODEL
+      });
+    }
 
     return res.status(200).json({
       status: "ok",
