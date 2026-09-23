@@ -139,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: "Gemini reference analysis request failed.",
       code: "GEMINI_UPSTREAM_ERROR",
       detail: error instanceof Error ? error.message : "Unknown server error.",
-      model: usedModel
+      model: DEFAULT_GEMINI_MODELS.join(", ")
     });
   }
 }
