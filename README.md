@@ -2,17 +2,51 @@
 
 Gemini-powered backend endpoint for a Figma visual consistency checker.
 
-## Endpoint
+## Health check
 
-POST /api/visual-audit
+GET:
 
-After Vercel deployment:
+https://YOUR-VERCEL-DOMAIN/api/health
+
+Expected response:
+
+{
+  "status": "ok",
+  "service": "figma-visual-qa-api",
+  "endpoint": "/api/visual-audit",
+  "auditMethod": "POST"
+}
+
+## Visual audit
+
+POST:
 
 https://YOUR-VERCEL-DOMAIN/api/visual-audit
 
-The endpoint is CORS-enabled and intentionally requires no client-side API key.
+The audit endpoint is CORS-enabled and requires no client-side API key.
 
-## Vercel environment variable
+The Figma plugin sends:
+- one or more reference page/frame renders
+- the current render
+- compact Figma geometry/metadata
+- requested audit categories
+- optional user requirement
+
+The server sends the multimodal request to Gemini and returns structured JSON findings.
+
+## Important Vercel payload limit
+
+Vercel serverless functions enforce a 4.5 MB request payload limit. The API therefore intentionally keeps requests below that limit.
+
+The plugin should:
+- export renders as JPG rather than PNG for visual auditing
+- use a width constraint around 1200px to keep long web pages manageable
+- send compact geometry only for relevant nodes
+- keep the total JSON request under approximately 3.8 MB
+
+Figma supports JPG/PNG export and WIDTH/HEIGHT/SCALE constraints through exportAsync.
+
+## Vercel environment variables
 
 GEMINI_API_KEY=your_gemini_key
 
@@ -21,27 +55,27 @@ GEMINI_MODEL=gemini-3.8-flash
 
 Never put the Gemini key in the Figma plugin.
 
-## What it does
+## Response
 
-The Figma plugin sends:
-- one or more reference page/frame renders
-- the current render
-- Figma geometry/metadata
-- requested audit categories
-- optional user requirement
+The endpoint returns:
+- summary
+- inferred reference visual profile
+- issue category
+- severity
+- confidence
+- affected Figma layer ID
+- explanation
+- reference evidence
+- suggested change
+- fixable flag
+- allowlisted fix operation
 
-The server sends the multimodal request to Gemini and returns structured JSON findings.
+The plugin executes fixes itself through the Figma Plugin API only after the user explicitly clicks Fix.
 
-References are analyzed together as the visual source of truth. The current design is compared against recurring visual patterns rather than a fixed design system.
-
-Each issue contains category, severity, confidence, affected layer ID when identifiable, reference evidence, suggested change, fixable flag, and a small allowlisted fix operation.
-
-The plugin should execute fixes itself through the Figma Plugin API only after the user explicitly clicks Fix.
-
-## Safety and limits
+## Safety
 
 Gemini never receives permission to execute Figma code.
 
-Max 6 references, 8 MB image string per image, 2 MB geometry JSON, 18 MB total JSON, and a best-effort 30 requests/hour/IP in-memory rate limit per function instance.
+The backend never returns executable JavaScript.
 
-Because the endpoint is unauthenticated, add a persistent rate limiter or WAF before broad production use.
+Because the audit endpoint is intentionally unauthenticated for the Figma plugin, keep the rate limiter and payload limits enabled. For broad production use, add a persistent rate limiter/WAF.
