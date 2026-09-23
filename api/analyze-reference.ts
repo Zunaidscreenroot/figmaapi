@@ -74,7 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server." });
+    console.error("analyze-reference config error: GEMINI_API_KEY missing");
+    return res.status(503).json({
+      error: "Gemini is not configured on this deployment.",
+      code: "GEMINI_API_KEY_MISSING"
+    });
   }
 
   try {
@@ -122,9 +126,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error("analyze-reference error", error);
-    return res.status(500).json({
-      error: "Reference analysis failed.",
-      detail: error instanceof Error ? error.message : "Unknown server error."
+    return res.status(502).json({
+      error: "Gemini reference analysis request failed.",
+      code: "GEMINI_UPSTREAM_ERROR",
+      detail: error instanceof Error ? error.message : "Unknown server error.",
+      model: MODEL
     });
   }
 }
