@@ -4,9 +4,9 @@ import { auditResponseSchema } from "../src/schema.js";
 import { VISUAL_AUDIT_SYSTEM_PROMPT } from "../src/prompt.js";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const MAX_REFERENCES = 4;
-const MAX_IMAGE_CHARS = 900_000;
-const MAX_GEOMETRY_CHARS = 500_000;
+const MAX_IMAGE_CHARS = 3_200_000;
+const MAX_GEOMETRY_CHARS = 700_000;
+const MAX_PROFILE_CHARS = 500_000;
 const MAX_REQUEST_CHARS = 3_800_000;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const MAX_REQUESTS_PER_IP = 30;
@@ -47,48 +47,42 @@ function allowed(req: VercelRequest): boolean {
   return true;
 }
 
-function parseImage(value: unknown, label: string): { mimeType: string; data: string } {
+function parseImage(value: unknown): { mimeType: string; data: string } {
   if (typeof value !== "string" || value.length === 0) {
-    throw new Error(label + " image is required.");
+    throw new Error("Current image is required.");
   }
 
   if (value.length > MAX_IMAGE_CHARS) {
-    throw new Error(label + " image is too large.");
+    throw new Error("Current image is too large. Export a smaller JPG render.");
   }
 
   if (!value.startsWith("data:")) {
-    return { mimeType: "image/png", data: value };
+    return { mimeType: "image/jpeg", data: value };
   }
 
   const match = value.match(/^data:([^;]+);base64,(.+)$/s);
-  if (!match) {
-    throw new Error("Invalid " + label + " image data URL.");
-  }
+  if (!match) throw new Error("Invalid image data URL.");
 
-  const mimeType = match[1];
+  const mimeType = match[1].toLowerCase();
   const data = match[2];
 
-  if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType.toLowerCase())) {
-    throw new Error(label + " must be PNG, JPEG, or WebP.");
+  if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
+    throw new Error("Current image must be PNG, JPEG, JPG, or WebP.");
   }
 
   if (!/^[A-Za-z0-9+/=\r\n]+$/.test(data)) {
-    throw new Error(label + " image data is not valid base64.");
+    throw new Error("Current image data is not valid base64.");
   }
 
   return { mimeType, data };
 }
 
-function safeString(value: unknown, maxLength: number): string {
-  return typeof value === "string" ? value.slice(0, maxLength) : "";
-}
-
-function geometryValue(value: unknown): unknown {
+function boundedJson(value: unknown, maxChars: number, label: string): string {
   const json = JSON.stringify(value ?? {});
-  if (json.length > MAX_GEOMETRY_CHARS) {
-    throw new Error("Geometry payload is too large.");
+  if (json.length > maxChars) {
+    throw new Error(label + " is too large.");
   }
-  return value ?? {};
+  return json;
 }
 
 function normalizeSummary(result: any): void {
@@ -106,16 +100,15 @@ function normalizeSummary(result: any): void {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   cors(res);
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
 
   if (req.method === "GET") {
     return res.status(200).json({
       status: "ok",
       service: "figma-visual-qa-api",
       endpoint: "/api/visual-audit",
-      message: "Use POST with reference/current renders and Figma geometry to run a visual audit."
+      auditMethod: "POST",
+      workflow: "analyze-reference -> visual-audit"
     });
   }
 
@@ -140,7 +133,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       typeof req.body === "string" ? req.body : JSON.stringify(req.body ?? {});
 
     if (rawBody.length > MAX_REQUEST_CHARS) {
-      return res.status(413).json({ error: "Request payload is too large." });
+      return res.status(413).json({
+        error: "Audit payload is too large. Send one compressed current JPG and compact referenceProfile data."
+      });
     }
 
     const body =
@@ -150,60 +145,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Invalid JSON body." });
     }
 
-    if (!Array.isArray(body.references) || body.references.length < 1) {
-      return res.status(400).json({
-        error: "At least one reference is required."
-      });
-    }
-
-    if (body.references.length > MAX_REFERENCES) {
-      return res.status(400).json({
-        error: "Maximum " + MAX_REFERENCES + " references are allowed."
-      });
-    }
-
     if (!body.current || typeof body.current !== "object") {
       return res.status(400).json({ error: "current is required." });
     }
 
-    const currentImage = parseImage(body.current.image, "Current");
-    const currentGeometry = geometryValue(body.current.geometry);
+    const currentImage = parseImage(body.current.image);
+    const currentGeometry = boundedJson(body.current.geometry, MAX_GEOMETRY_CHARS, "Current geometry");
 
-    const references = body.references.map((ref: any, index: number) => ({
-      name: safeString(ref?.name, 120) || "Reference " + (index + 1),
-      geometry: geometryValue(ref?.geometry),
-      image: parseImage(ref?.image, "Reference " + (index + 1))
-    }));
+    const profiles = Array.isArray(body.referenceProfiles) ? body.referenceProfiles : [];
+
+    if (profiles.length === 0) {
+      return res.status(400).json({
+        error: "referenceProfiles is required. Analyze each reference with /api/analyze-reference first."
+      });
+    }
+
+    const profileJson = boundedJson(profiles, MAX_PROFILE_CHARS, "Reference profiles");
 
     const checks = Array.isArray(body.options?.check)
-      ? body.options.check
-          .map((x: unknown) => safeString(x, 80))
-          .filter(Boolean)
-          .slice(0, 40)
+      ? body.options.check.map((x: unknown) => String(x).slice(0, 80)).slice(0, 40)
       : [];
 
-    const userRequirement = safeString(body.options?.userRequirement, 3000);
-
-    const referenceBlocks = references.flatMap((ref: any) => [
-      {
-        inlineData: {
-          mimeType: ref.image.mimeType,
-          data: ref.image.data
-        }
-      },
-      {
-        text:
-          "REFERENCE NAME: " +
-          ref.name +
-          "\nREFERENCE GEOMETRY:\n" +
-          JSON.stringify(ref.geometry)
-      }
-    ]);
+    const userRequirement =
+      typeof body.options?.userRequirement === "string"
+        ? body.options.userRequirement.slice(0, 3000)
+        : "";
 
     const contents = [
       { text: VISUAL_AUDIT_SYSTEM_PROMPT },
-      ...referenceBlocks,
-      { text: "CURRENT DESIGN RENDER:" },
+      {
+        text:
+          "REFERENCE VISUAL PROFILES:\n" +
+          profileJson +
+          "\n\nCURRENT DESIGN RENDER:"
+      },
       {
         inlineData: {
           mimeType: currentImage.mimeType,
@@ -213,9 +188,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {
         text:
           "CURRENT DESIGN NAME: " +
-          (safeString(body.current.name, 120) || "Current Design") +
+          (typeof body.current.name === "string" ? body.current.name.slice(0, 120) : "Current Design") +
           "\nCURRENT DESIGN GEOMETRY:\n" +
-          JSON.stringify(currentGeometry) +
+          currentGeometry +
           "\nREQUESTED CHECKS:\n" +
           JSON.stringify(checks) +
           "\nADDITIONAL USER REQUIREMENT:\n" +
@@ -257,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...result,
       meta: {
         model: MODEL,
-        referenceCount: references.length,
+        referenceCount: profiles.length,
         generatedAt: new Date().toISOString()
       }
     });
