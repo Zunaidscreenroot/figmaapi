@@ -34,28 +34,28 @@ export const auditResponseSchema = {
         type: "object",
         additionalProperties: false,
         properties: {
-             id: { type: "string" },
-          category: { type: "string", enum: ["layout", "alignment", "spacing", "padding", "gaps", "grid", "whitespace", "visual-hierarchy", "typography", "components", "overflow", "clipping", "overlap", "radius", "borders", "images", "visual-consistency"] },
-            severity: { type: "string", enum: ["high","medium","low"] },
-            confidence: { type: "number" },
-            layerId: { type: ["string", "null"] },
-            layerName: { type: ["string", "null"] },
-            title: { type: "string" },
-            description: { type: "string" },
-            referenceEvidence: { type: "array", items: { type: "string" } },
-            currentObservation: { type: "string" },
-            suggestedChange: { type: "string" },
-            fixable: { type: "boolean" },
-            fix: {
-              type: ["object", "null"],
-              additionalProperties: false,
+          id: { type: "string" },
+          category: { type: "string", enum: ["layout","alignment","spacing","padding","gaps","grid","whitespace","visual-hierarchy","typography","components","overflow","clipping","overlap","radius","borders","images","visual-consistency"] },
+          severity: { type: "string", enum: ["high","medium","low"] },
+          confidence: { type: "number" },
+          layerId: { type: ["string","null"] },
+          layerName: { type: ["string","null"] },
+          title: { type: "string" },
+          description: { type: "string" },
+          referenceEvidence: { type: "array", items: { type: "string" } },
+          currentObservation: { type: "string" },
+          suggestedChange: { type: "string" },
+          fixable: { type: "boolean" },
+          fix: {
+            type: ["object","null"],
+            additionalProperties: false,
             properties: {
-                operation: { type: "string", enum: ["SET_X", "SET_Y", "SET_WIDTH", "SET_HEIGHT", "SET_PADDING_TOP", "SET_PADDING_RIGHT", "SET_PADDING_BOTTOM", "SET_PADDING_LEFT", "SET_ITEM_SPACING", "SET_RADIUS", "SET_CLIPS_CONTENT", "SET_AUSO_LAYOUT", "ALIGN_LEFT", "ALIGN_CENTER", "ALIGN_RIGHT", "MATCH_REFERENGE_SPACING", "MATCH_REFERENGE_SIXE"]},
-                value: { type: ["number", "boolean", "string", "null"] },
-                secondaryValue: { type: ["number", "boolean", "string", "null"] }
-              },
-              required: ["operation", "value", "secondaryValue"]
-            }
+              operation: { type: "string", enum: ["SET_X","SET_Y","SET_WIDTH","SET_HEIGHT","SET_PADDING_TOP","SET_PADDING_RIGHT","SET_PADDING_BOTTOM","SET_PADDING_LEFT","SET_ITEM_SPACING","SET_RADIUS","SET_CLIPS_CONTENT","SET_AUTO_LAYOUT","ALIGN_LEFT","ALIGN_CENTER","ALIGN_RIGHT","MATCH_REFERENCE_SPACING","MATCH_REFERENCE_SIZE"] },
+              value: { type: ["number","boolean","string","null"] },
+              secondaryValue: { type: ["number","boolean","string","null"] }
+            },
+            required: ["operation","value","secondaryValue"]
+          }
         },
         required: ["id","category","severity","confidence","layerId","layerName","title","description","referenceEvidence","currentObservation","suggestedChange","fixable","fix"]
       }
