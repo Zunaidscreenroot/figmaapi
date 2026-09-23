@@ -4,10 +4,10 @@ import { auditResponseSchema } from "../src/schema.js";
 import { VISUAL_AUDIT_SYSTEM_PROMPT } from "../src/prompt.js";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const MAX_REFERENCES = 6;
-const MAX_IMAGE_CHARS = 8_000_000;
-const MAX_GEOMETRY_CHARS = 2_000_000;
-const MAX_REQUEST_CHARS = 18_000_000;
+const MAX_REFERENCES = 4;
+const MAX_IMAGE_CHARS = 900_000;
+const MAX_GEOMETRY_CHARS = 500_000;
+const MAX_REQUEST_CHARS = 3_800_000;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const MAX_REQUESTS_PER_IP = 30;
 
