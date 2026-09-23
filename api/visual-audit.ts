@@ -111,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auditMethod: "POST",
       workflow: "analyze-reference -> visual-audit",
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      model: usedModel
+      model: DEFAULT_GEMINI_MODELS.join(", ")
     });
   }
 
